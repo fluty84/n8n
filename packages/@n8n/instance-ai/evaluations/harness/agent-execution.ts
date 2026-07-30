@@ -13,7 +13,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { agentHandler } from './artifacts/agent-handler';
 import type { EvalLogger } from './logger';
 import { writeScenarioVerificationSnapshot, type VerificationArtifact } from './scenario-execution';
-import { isTransientExecutionAbort, MAX_EXEC_ATTEMPTS } from './transient-error';
+import {
+	isServerBudgetStop,
+	isTransientExecutionAbort,
+	MAX_EXEC_ATTEMPTS,
+} from './transient-error';
 import { verifyChecklist } from '../checklist/verifier';
 import type { N8nClient } from '../clients/n8n-client';
 import type {
@@ -97,6 +101,11 @@ export async function executeAgentScenario(
 			timeoutMs,
 		);
 	}
+	// Killed for time, not by the builder — throw so the timeout path classifies it.
+	if (!evalResult.success && isServerBudgetStop(evalResult.errors)) {
+		throw new Error(`The operation was aborted due to timeout: ${evalResult.errors.join('; ')}`);
+	}
+
 	const execMs = Date.now() - execStart;
 
 	logger.info(
