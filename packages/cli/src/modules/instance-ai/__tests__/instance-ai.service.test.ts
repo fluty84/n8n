@@ -1841,6 +1841,7 @@ type SuspendedRunResumeServiceInternals = {
 			}>;
 			action?: 'apply' | 'test-trigger';
 			resourceDecision?: string;
+			connectedSlugs?: string[];
 		},
 	) => Promise<{ ok: true; runId: string } | null>;
 	revalidateActiveUser: Mock<(...args: [string]) => Promise<User | null>>;
@@ -2493,6 +2494,21 @@ describe('InstanceAiService — suspended run user revalidation', () => {
 
 		expect(result).toEqual({ ok: true, runId: 'run-1' });
 		expect(service.rebuildAgentForAutoSetupResume).not.toHaveBeenCalled();
+	});
+
+	it('threads the connected MCP slugs into the resume data', async () => {
+		const service = createSuspendedRunResumeService();
+		service.revalidateActiveUser.mockResolvedValue({ id: 'user-1', disabled: false } as User);
+
+		await service.resumeSuspendedRun('user-1', 'req-1', {
+			approved: true,
+			connectedSlugs: ['brave'],
+		});
+
+		const [options] = service.tracing.createOrchestratorResumeTraceContext.mock.calls[0] as [
+			{ input: { resumeFields: string[] } },
+		];
+		expect(options.input.resumeFields).toContain('connectedSlugs');
 	});
 
 	it('includes the substantive user response in the resume trace input', async () => {

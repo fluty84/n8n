@@ -496,6 +496,10 @@ export interface McpRegistryServerSummary {
 
 export interface InstanceAiMcpService {
 	search(queries: string[]): Promise<McpRegistryServerSummary[]>;
+	/** Unknown or unconnectable slugs are omitted, so the caller can tell the agent
+	 *  it invented one instead of offering a card for nothing. */
+	getServers(slugs: string[]): Promise<McpRegistryServerSummary[]>;
+	listConnectedSlugs(): Promise<Set<string>>;
 }
 
 export interface ExploreResourcesParams {

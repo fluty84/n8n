@@ -122,6 +122,14 @@ export class McpRegistryService {
 		return listMcpRegistryServers(await this.getAll()).slice(0, limit);
 	}
 
+	/**
+	 * Exact-slug counterpart of `search`. Slugs with no matching server, or no
+	 * usable remote, are absent from the result rather than an error.
+	 */
+	async resolveBySlugs(slugs: string[]): Promise<McpRegistrySearchResult[]> {
+		return listMcpRegistryServers(await this.getBySlugs(slugs));
+	}
+
 	private startPeriodicRefresh(): void {
 		if (this.isShuttingDown || this.refreshInterval) {
 			return;

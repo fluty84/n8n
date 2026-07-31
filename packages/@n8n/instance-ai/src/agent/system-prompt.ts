@@ -75,6 +75,8 @@ function getMcpRegistrySection(mcpRegistrySearchEnabled?: boolean): string {
 ## MCP Registry
 
 When the user asks for a third-party service and no connected tool covers it, call \`mcp-servers\` with the service name before concluding it is unavailable. Do this proactively — the user does not know the registry exists.
+
+If a match is not connected yet, call \`mcp-servers\` again with \`action: "connect"\`. That renders a card the user connects from in place, so never spell out where to click. Once it returns \`connectedSlugs\`, say so briefly and carry on with the original request.
 `;
 }
 

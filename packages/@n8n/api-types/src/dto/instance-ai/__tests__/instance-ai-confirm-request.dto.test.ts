@@ -108,6 +108,10 @@ describe('InstanceAiConfirmRequestDto', () => {
 				'setupWorkflowTestTrigger (minimal)',
 				{ kind: 'setupWorkflowTestTrigger', testTriggerNode: 'Webhook' },
 			],
+			// InstanceAiMcpConnect
+			['mcpConnect (connected)', { kind: 'mcpConnect', approved: true, connectedSlugs: ['brave'] }],
+			['mcpConnect (skipped)', { kind: 'mcpConnect', approved: false, connectedSlugs: [] }],
+			['mcpConnect (minimal)', { kind: 'mcpConnect', approved: false }],
 		];
 
 		test.each(cases)('%s', (_label, payload) => {
@@ -149,6 +153,11 @@ describe('InstanceAiConfirmRequestDto', () => {
 
 		test('credentialAutoSetup without credentialType', () => {
 			const result = InstanceAiConfirmRequestDto.safeParse({ kind: 'credentialAutoSetup' });
+			expect(result.success).toBe(false);
+		});
+
+		test('mcpConnect without approved', () => {
+			const result = InstanceAiConfirmRequestDto.safeParse({ kind: 'mcpConnect' });
 			expect(result.success).toBe(false);
 		});
 

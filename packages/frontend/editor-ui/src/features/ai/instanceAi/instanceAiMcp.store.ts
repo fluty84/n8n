@@ -29,6 +29,8 @@ export const useInstanceAiMcpStore = defineStore('instanceAiMcp', () => {
 	const credentialsStore = useCredentialsStore();
 
 	const connections = ref<InstanceAiMcpConnectionResponse[]>([]);
+	const hasFetchedConnections = ref(false);
+	let inFlightConnectionsFetch: Promise<void> | null = null;
 	const catalog = ref<McpRegistryServerResponse[] | null>(null);
 	const connectionToolsById = reactive(new Map<string, InstanceAiMcpConnectionToolResponse[]>());
 	const isLoadingConnections = ref(false);
@@ -50,13 +52,25 @@ export const useInstanceAiMcpStore = defineStore('instanceAiMcp', () => {
 
 	async function fetchConnections(): Promise<void> {
 		isLoadingConnections.value = true;
-		try {
-			connections.value = await fetchMcpConnections(rootStore.restApiContext);
-		} catch (error) {
-			toast.showError(error, i18n.baseText('instanceAi.mcp.error.fetchConnections'));
-		} finally {
-			isLoadingConnections.value = false;
-		}
+		const attempt = (async () => {
+			try {
+				connections.value = await fetchMcpConnections(rootStore.restApiContext);
+				hasFetchedConnections.value = true;
+			} catch (error) {
+				toast.showError(error, i18n.baseText('instanceAi.mcp.error.fetchConnections'));
+			} finally {
+				isLoadingConnections.value = false;
+				inFlightConnectionsFetch = null;
+			}
+		})();
+		inFlightConnectionsFetch = attempt;
+		await attempt;
+	}
+
+	/** For surfaces that need connections but can't assume the sidebar mounted. */
+	async function ensureConnectionsLoaded(): Promise<void> {
+		if (hasFetchedConnections.value) return;
+		await (inFlightConnectionsFetch ?? fetchConnections());
 	}
 
 	async function fetchCatalogLazy(): Promise<void> {
@@ -162,6 +176,8 @@ export const useInstanceAiMcpStore = defineStore('instanceAiMcp', () => {
 
 	function reset(): void {
 		connections.value = [];
+		hasFetchedConnections.value = false;
+		inFlightConnectionsFetch = null;
 		catalog.value = null;
 		connectionToolsById.clear();
 		inFlightConnectionToolsById.clear();
@@ -175,6 +191,7 @@ export const useInstanceAiMcpStore = defineStore('instanceAiMcp', () => {
 		isLoadingCatalog,
 		connectionsByServerSlug,
 		fetchConnections,
+		ensureConnectionsLoaded,
 		fetchCatalogLazy,
 		fetchConnectionToolsLazy,
 		connect,

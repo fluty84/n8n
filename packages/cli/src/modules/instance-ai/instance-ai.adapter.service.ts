@@ -144,6 +144,7 @@ import { NodeCatalogService } from '@/node-catalog';
 import { DataTableRepository } from '@/modules/data-table/data-table.repository';
 import { DataTableService } from '@/modules/data-table/data-table.service';
 import { MCP_REGISTRY_PACKAGE_NAME } from '@/modules/mcp-registry/node-description-transform';
+import type { McpRegistrySearchResult } from '@/modules/mcp-registry/registry/mcp-registry-search';
 import { McpRegistryService } from '@/modules/mcp-registry/registry/mcp-registry.service';
 import { SourceControlPreferencesService } from '@/modules/source-control.ee/source-control-preferences.service.ee';
 import { userHasScopes } from '@/permissions.ee/check-access';
@@ -460,23 +461,56 @@ export class InstanceAiAdapterService {
 	}
 
 	private createMcpAdapter(user: User): InstanceAiMcpService {
+		const toSummaries = (
+			servers: McpRegistrySearchResult[],
+			connectedSlugs: Set<string>,
+		): McpRegistryServerSummary[] =>
+			servers.map((server) => ({
+				slug: server.slug,
+				title: server.title,
+				description: server.description,
+				tools: server.tools,
+				isConnected: connectedSlugs.has(server.slug),
+			}));
+
 		return {
 			search: async (queries: string[]): Promise<McpRegistryServerSummary[]> => {
 				const [servers, connectedSlugs] = await Promise.all([
 					Container.get(McpRegistryService).search(queries),
 					this.listUsableMcpRegistrySlugs(user),
 				]);
-				return servers.map((server) => ({
-					slug: server.slug,
-					title: server.title,
-					description: server.description,
-					tools: server.tools,
-					isConnected: connectedSlugs.has(server.slug),
-				}));
+				return toSummaries(servers, connectedSlugs);
 			},
+			getServers: async (slugs: string[]): Promise<McpRegistryServerSummary[]> => {
+				const [servers, connectedSlugs] = await Promise.all([
+					Container.get(McpRegistryService).resolveBySlugs(slugs),
+					this.listConnectedMcpRegistrySlugs(user),
+				]);
+				return toSummaries(servers, connectedSlugs);
+			},
+			listConnectedSlugs: async (): Promise<Set<string>> =>
+				await this.listConnectedMcpRegistrySlugs(user),
 		};
 	}
 
+	/**
+	 * Whether a connection row exists — the same thing the connect card shows, and
+	 * the invariant the connect action enforces (one per server). Deliberately not
+	 * `getRegistryMcpServers`, which additionally requires a usable token: a user
+	 * who just connected but hasn't finished the OAuth handshake would see
+	 * "Connected" on the card while the agent was told nothing had happened.
+	 * Errors propagate — reporting "not connected" for a failed lookup would tell
+	 * the agent a successful connection never happened.
+	 */
+	private async listConnectedMcpRegistrySlugs(user: User): Promise<Set<string>> {
+		const connections = await Container.get(InstanceAiMcpRegistryService).listConnectionsForUser(
+			user,
+		);
+		return new Set(connections.map((connection) => connection.serverSlug));
+	}
+
+	/** Servers whose tools a run would actually load — a stricter bar than a
+	 *  connection row existing, and advisory, so a failure degrades to "none". */
 	private async listUsableMcpRegistrySlugs(user: User): Promise<Set<string>> {
 		try {
 			const resolved = await Container.get(InstanceAiMcpRegistryService).getRegistryMcpServers(

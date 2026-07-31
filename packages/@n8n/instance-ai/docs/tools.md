@@ -751,9 +751,16 @@ conversation. Creation and editing stay on `build-agent`.
 ### `mcp-servers` *(domain tool — conditional)*
 
 Search the MCP registry so the orchestrator can discover a hosted MCP server for
-a service the user asked about but has not connected. One action, `search`, over
-`{ queries: string[] }`; returns
-`{ results: [{ slug, title, description, tools, isConnected }] }`.
+a service the user asked about but has not connected, and offer an inline card to
+connect one.
+
+- `search` over `{ queries: string[] }` returns
+  `{ results: [{ slug, title, description, tools, isConnected }] }`.
+- `connect` over `{ serverSlugs: string[] (max 3), reason: string }` suspends with
+  an `mcpConnectRequest` payload, which the frontend renders as the inline
+  "Available tools" card. Already-connected slugs are a no-op. On resume the tool
+  re-reads the user's connections and reports only verified slugs — the client's
+  `connectedSlugs` is a hint, never the source of truth.
 
 ## Other Domain Tools
 

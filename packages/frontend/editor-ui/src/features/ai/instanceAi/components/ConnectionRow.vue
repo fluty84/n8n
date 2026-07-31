@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { computed } from 'vue';
-import { N8nDropdownMenu, N8nIcon, N8nText } from '@n8n/design-system';
+import { N8nButton, N8nDropdownMenu, N8nIcon, N8nText } from '@n8n/design-system';
 import type { DropdownMenuItemProps, IconName } from '@n8n/design-system';
 import { useI18n, type BaseTextKey } from '@n8n/i18n';
 
@@ -15,6 +15,14 @@ const props = defineProps<{
 	status: ConnectionStatus;
 	actions: RowAction[];
 	dropdownPortalTarget?: HTMLElement;
+	/** Replaces the status dot + menu with a primary button, and makes the row
+	 *  itself inert (nothing to open settings for yet). */
+	primaryActionLabel?: string;
+	primaryActionLoading?: boolean;
+	/** Renders the status as text next to the dot instead of only a tooltip. */
+	showStatusLabel?: boolean;
+	/** Overrides the actions-menu trigger glyph (defaults to the ellipsis). */
+	menuActivatorIcon?: IconName;
 }>();
 
 const iconSource = computed<{ type: 'icon'; name: IconName } | { type: 'file'; src: string }>(
@@ -64,12 +72,13 @@ function handleSelect(action: RowAction) {
 }
 
 function handleRowClick() {
+	if (props.primaryActionLabel) return;
 	emit('openSettings');
 }
 </script>
 
 <template>
-	<div :class="$style.row" @click="handleRowClick">
+	<div :class="[$style.row, primaryActionLabel && $style.rowStatic]" @click="handleRowClick">
 		<span :class="$style.iconWrap">
 			<img
 				v-if="iconSource.type === 'file'"
@@ -86,24 +95,40 @@ function handleRowClick() {
 			<N8nText bold size="small" :class="$style.name">{{ name }}</N8nText>
 			<N8nText size="xsmall" color="text-light">{{ subtitle }}</N8nText>
 		</div>
-		<span
-			:class="[
-				$style.dot,
-				status === 'connected' && $style.dotConnected,
-				status === 'waiting' && $style.dotWaiting,
-				status === 'disconnected' && $style.dotDisconnected,
-			]"
-			:title="statusTooltip"
-		/>
-		<div @click.stop>
-			<N8nDropdownMenu
-				v-if="menuItems.length > 0"
-				:items="menuItems"
-				placement="bottom-end"
-				:portal-target="dropdownPortalTarget"
-				@select="handleSelect"
+		<N8nButton
+			v-if="primaryActionLabel"
+			variant="solid"
+			size="small"
+			:loading="primaryActionLoading"
+			data-test-id="instance-ai-connection-row-primary-action"
+			@click.stop="emit('connect')"
+		>
+			{{ primaryActionLabel }}
+		</N8nButton>
+		<template v-else>
+			<span
+				:class="[
+					$style.dot,
+					status === 'connected' && $style.dotConnected,
+					status === 'waiting' && $style.dotWaiting,
+					status === 'disconnected' && $style.dotDisconnected,
+				]"
+				:title="showStatusLabel ? undefined : statusTooltip"
 			/>
-		</div>
+			<N8nText v-if="showStatusLabel" size="small" color="text-light">{{ statusTooltip }}</N8nText>
+			<div @click.stop>
+				<N8nDropdownMenu
+					v-if="menuItems.length > 0"
+					:items="menuItems"
+					placement="bottom-end"
+					:portal-target="dropdownPortalTarget"
+					:activator-icon="
+						menuActivatorIcon ? { type: 'icon', value: menuActivatorIcon } : undefined
+					"
+					@select="handleSelect"
+				/>
+			</div>
+		</template>
 	</div>
 </template>
 
@@ -115,6 +140,10 @@ function handleRowClick() {
 	padding: var(--spacing--2xs) 0;
 	margin-left: var(--spacing--2xs);
 	cursor: pointer;
+}
+
+.rowStatic {
+	cursor: default;
 }
 
 .iconWrap {

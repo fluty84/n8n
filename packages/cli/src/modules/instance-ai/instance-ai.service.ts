@@ -440,6 +440,8 @@ function toConfirmationData(request: InstanceAiConfirmRequest): ConfirmationData
 			return { approved: true, autoSetup: { credentialType: request.credentialType } };
 		case 'resourceDecision':
 			return { approved: true, resourceDecision: request.resourceDecision };
+		case 'mcpConnect':
+			return { approved: request.approved, connectedSlugs: request.connectedSlugs };
 		case 'setupWorkflowApply':
 			return {
 				approved: true,
@@ -4739,6 +4741,7 @@ export class InstanceAiService {
 			...(data.resourceDecision ? { resourceDecision: data.resourceDecision } : {}),
 			...(data.scope ? { scope: data.scope } : {}),
 			...(data.autoSetup ? { autoSetup: data.autoSetup } : {}),
+			...(data.connectedSlugs ? { connectedSlugs: data.connectedSlugs } : {}),
 		};
 
 		const resumeTracing = await this.tracing.createOrchestratorResumeTraceContext({

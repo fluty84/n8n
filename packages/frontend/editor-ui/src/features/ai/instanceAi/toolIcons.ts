@@ -1,5 +1,7 @@
+import type { IconName } from '@n8n/design-system';
 import type { ToolIconSource } from '@/features/shared/toolsConnection/types';
 import type { McpRegistryServerIconResponse } from '@n8n/api-types';
+import type { ConnectionRowIcon } from './components/ConnectionRow.vue';
 
 function pickIconForTheme(
 	icons: McpRegistryServerIconResponse[],
@@ -18,4 +20,14 @@ export function iconForTool(
 ): ToolIconSource {
 	const src = pickIconForTheme(icons, appliedTheme);
 	return src ? { type: 'file', src } : { type: 'icon', name: 'mcp' };
+}
+
+/** `iconForTool` narrowed to `ConnectionRow`'s icon prop, whose icon branch is a
+ *  concrete `IconName` rather than `ToolIconSource`'s plain string. */
+export function connectionRowIcon(
+	icons: McpRegistryServerIconResponse[],
+	appliedTheme: 'light' | 'dark',
+): ConnectionRowIcon {
+	const icon = iconForTool(icons, appliedTheme);
+	return icon.type === 'file' ? icon : (icon.name as IconName);
 }

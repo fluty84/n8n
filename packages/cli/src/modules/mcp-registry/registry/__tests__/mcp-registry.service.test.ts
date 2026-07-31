@@ -149,6 +149,23 @@ describe('McpRegistryService', () => {
 			expect(repository.findBy).toHaveBeenCalledWith([{ slug: 'notion' }, { slug: 'linear' }]);
 			expect(servers).toEqual([notionMockServer, linearMockServer]);
 		});
+
+		it('maps resolveBySlugs into the same shape as search', async () => {
+			const { service } = createService();
+
+			const [resolved] = await service.resolveBySlugs(['notion']);
+			const [searched] = await service.search(['notion']);
+
+			expect(resolved).toEqual(searched);
+		});
+
+		it('omits unknown slugs from resolveBySlugs', async () => {
+			const { service } = createService({ storedServers: [notionMockServer] });
+
+			const results = await service.resolveBySlugs(['notion', 'made-up']);
+
+			expect(results.map((result) => result.slug)).toEqual(['notion']);
+		});
 	});
 
 	describe('refresh flow', () => {

@@ -3761,7 +3761,9 @@ describe('MCP registry discovery', () => {
 		moduleActive?: boolean;
 		featureFlags?: Record<string, string>;
 		registrySearch?: Mock;
+		registryResolveBySlugs?: Mock;
 		getRegistryMcpServers?: Mock;
+		listConnectionsForUser?: Mock;
 	}
 
 	/** Route `Container.get` by token — the adapter resolves PostHog and both MCP
@@ -3769,19 +3771,28 @@ describe('MCP registry discovery', () => {
 	function stubContainer(stubs: McpStubs = {}) {
 		const getFeatureFlags = vi.fn().mockResolvedValue(stubs.featureFlags ?? {});
 		const search = stubs.registrySearch ?? vi.fn().mockResolvedValue([]);
+		const resolveBySlugs = stubs.registryResolveBySlugs ?? vi.fn().mockResolvedValue([]);
 		const getRegistryMcpServers = stubs.getRegistryMcpServers ?? vi.fn().mockResolvedValue([]);
+		const listConnectionsForUser = stubs.listConnectionsForUser ?? vi.fn().mockResolvedValue([]);
 
 		vi.spyOn(Container, 'get').mockImplementation((token: unknown) => {
 			if (token === PostHogClient) return { getFeatureFlags };
-			if (token === McpRegistryService) return { search };
-			if (token === InstanceAiMcpRegistryService) return { getRegistryMcpServers };
+			if (token === McpRegistryService) return { search, resolveBySlugs };
+			if (token === InstanceAiMcpRegistryService)
+				return { getRegistryMcpServers, listConnectionsForUser };
 			// Stands in for ModuleRegistry: `mcp-registry` active, `agents` not.
 			return {
 				isActive: (name: string) => (stubs.moduleActive ?? true) && name === 'mcp-registry',
 			};
 		});
 
-		return { getFeatureFlags, search, getRegistryMcpServers };
+		return {
+			getFeatureFlags,
+			search,
+			resolveBySlugs,
+			getRegistryMcpServers,
+			listConnectionsForUser,
+		};
 	}
 
 	function createAdapter(mcpAccessEnabled = true): InstanceAiAdapterService {
@@ -3911,6 +3922,59 @@ describe('MCP registry discovery', () => {
 			const results = await context.mcpService!.search(['drive']);
 
 			expect(results[0].isConnected).toBe(false);
+		});
+
+		it('resolves exact slugs through the same summary shape', async () => {
+			const { resolveBySlugs } = stubContainer({
+				registryResolveBySlugs: vi.fn().mockResolvedValue([registryHit]),
+			});
+			const context = createAdapter().createContext(user, { mcpConnectionsEnabled: true });
+
+			const results = await context.mcpService!.getServers(['google-drive', 'made-up']);
+
+			expect(resolveBySlugs).toHaveBeenCalledWith(['google-drive', 'made-up']);
+			expect(results).toEqual([
+				{
+					slug: 'google-drive',
+					title: 'Google Drive',
+					description: 'Work with Drive files',
+					tools: [{ name: 'list_files', title: 'List files' }],
+					isConnected: false,
+				},
+			]);
+		});
+
+		it('lists slugs with a connection row, not just the loadable ones', async () => {
+			// A row whose OAuth handshake never finished doesn't resolve to a usable
+			// server, but the connect card shows it as connected — so must this.
+			stubContainer({
+				listConnectionsForUser: vi.fn().mockResolvedValue([{ serverSlug: 'google-drive' }]),
+				getRegistryMcpServers: vi.fn().mockResolvedValue([]),
+			});
+			const context = createAdapter().createContext(user, { mcpConnectionsEnabled: true });
+
+			expect(await context.mcpService!.listConnectedSlugs()).toEqual(new Set(['google-drive']));
+		});
+
+		it('surfaces a lookup failure rather than reporting no connections', async () => {
+			stubContainer({
+				listConnectionsForUser: vi.fn().mockRejectedValue(new Error('query failed')),
+			});
+			const context = createAdapter().createContext(user, { mcpConnectionsEnabled: true });
+
+			await expect(context.mcpService!.listConnectedSlugs()).rejects.toThrow('query failed');
+		});
+
+		it('marks getServers connected from the connection rows', async () => {
+			stubContainer({
+				registryResolveBySlugs: vi.fn().mockResolvedValue([registryHit]),
+				listConnectionsForUser: vi.fn().mockResolvedValue([{ serverSlug: 'google-drive' }]),
+			});
+			const context = createAdapter().createContext(user, { mcpConnectionsEnabled: true });
+
+			const [result] = await context.mcpService!.getServers(['google-drive']);
+
+			expect(result.isConnected).toBe(true);
 		});
 	});
 });

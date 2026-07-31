@@ -33,6 +33,7 @@ export type TimelineBlock =
 	| { type: 'text'; key: string; entry: TextEntry }
 	| { type: 'tasks'; key: string; toolCall: InstanceAiToolCallState }
 	| { type: 'plan-review'; key: string; toolCall: InstanceAiToolCallState }
+	| { type: 'mcp-connect'; key: string; toolCall: InstanceAiToolCallState }
 	| { type: 'questions'; key: string; toolCall: InstanceAiToolCallState }
 	| { type: 'child'; key: string; child: InstanceAiAgentNode };
 
@@ -40,14 +41,15 @@ type ToolCallKind =
 	| 'hidden'
 	| 'tasks'
 	| 'plan-review'
+	| 'mcp-connect'
 	| 'questions'
 	| 'questions-pending'
 	| 'trace';
 
 /**
  * How a tool call renders in the timeline. `trace` rows join thinking blocks;
- * `tasks`/`plan-review`/`questions` render standalone UI; `hidden` calls are
- * dropped without splitting a run.
+ * `tasks`/`plan-review`/`mcp-connect`/`questions` render standalone UI; `hidden`
+ * calls are dropped without splitting a run.
  *
  * Builder calls delegated to a sub-agent (`*-with-agent`) are hidden — the
  * child agent section represents them. In-thread builds (`build-workflow`)
@@ -59,6 +61,13 @@ function classifyToolCall(tc: InstanceAiToolCallState): ToolCallKind {
 	if (tc.renderHint === 'builder' && tc.toolName.endsWith('-with-agent')) return 'hidden';
 	if (tc.renderHint && INVISIBLE_RENDER_HINTS.has(tc.renderHint)) return 'hidden';
 	if (tc.confirmation?.inputType === 'plan-review') return 'plan-review';
+	// Also matched while the connect call is still in flight, so the tool-call row
+	// never renders inside the thinking block only to be pulled out of it when the
+	// suspend payload lands.
+	if (tc.confirmation?.mcpConnectRequest) return 'mcp-connect';
+	if (tc.isLoading && tc.toolName === 'mcp-servers' && tc.args?.action === 'connect') {
+		return 'mcp-connect';
+	}
 	if (tc.renderHint === 'planner') return 'hidden';
 	if (tc.confirmation?.inputType === 'questions') {
 		return tc.isLoading ? 'questions-pending' : 'questions';
@@ -188,6 +197,9 @@ export function buildTimelineBlocks(
 				return;
 			case 'plan-review':
 				pushStandalone({ type: 'plan-review', key: `plan-${idx}`, toolCall: tc });
+				return;
+			case 'mcp-connect':
+				pushStandalone({ type: 'mcp-connect', key: `mcp-connect-${idx}`, toolCall: tc });
 				return;
 			case 'questions':
 				pushStandalone({ type: 'questions', key: `questions-${idx}`, toolCall: tc });
